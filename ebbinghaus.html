@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>エビングハウスくん</title>
+  <!-- Tailwind CSSを読み込み -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- ReactとReactDOMを読み込み -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- Babelを読み込み (JSXをブラウザで解釈するため) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    /* フォントの適用など、基本的なスタイル */
+    body {
+        font-family: 'Hiragino Kaku Gothic ProN', 'ヒラギノ角ゴ ProN W3', Meiryo, メイリオ, Osaka, 'MS PGothic', arial, helvetica, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <!-- Reactアプリが描画されるコンテナ -->
+  <div id="root"></div>
+
+  <!-- Reactコンポーネントのコード -->
+  <script type="text/babel">
+    const { useState, Fragment } = React;
+    // lucide-reactのアイコンはCDN経由では直接使えないため、
+    // ここでは簡易的なSVGアイコンで代替します。
+    const Icon = ({ name, className }) => {
+        const icons = {
+            ChevronRight: <path d="m9 18 6-6-6-6" />,
+            Bell: <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />,
+            Book: <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />,
+            Settings: <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />,
+            Edit: <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />,
+            LogOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></>,
+            User: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
+            Mail: <><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></>,
+            MessageSquare: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
+            Lock: <><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
+            Check: <path d="M20 6 9 17l-5-5" />,
+        };
+        return (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {icons[name] || <circle cx="12" cy="12" r="10" />}
+            </svg>
+        );
+    };
+
+    // --- ここから下にReactコンポーネントのコードを全てコピー&ペースト ---
+    
+    // --- ヘルパー関数 ---
+    const formatDate = (date) => {
+      if (!date) return '';
+      const d = new Date(date);
+      const days = ['日', '月', '火', '水', '木', '金', '土'];
+      const dayOfWeek = days[d.getDay()];
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${year}/${month}/${day}(${dayOfWeek}) ${hours}:${minutes}`;
+    };
+
+    const calculateNotifyDate = (registeredAt, interval) => {
+      const baseDate = new Date(registeredAt);
+      switch (interval) {
+        case '20分':
+          baseDate.setMinutes(baseDate.getMinutes() + 20);
+          break;
+        case '1時間':
+          baseDate.setHours(baseDate.getHours() + 1);
+          break;
+        case '9時間':
+          baseDate.setHours(baseDate.getHours() + 9);
+          break;
+        case '1日':
+          baseDate.setDate(baseDate.getDate() + 1);
+          break;
+        case '1週間':
+          baseDate.setDate(baseDate.getDate() + 7);
+          break;
+        case '1ヶ月':
+          baseDate.setMonth(baseDate.getMonth() + 1);
+          break;
+        default:
+          break;
+      }
+      return baseDate;
+    };
+
+    const initialWords = [
+      { id: 1, word: 'procrastination', meaning: '先延ばしにすること', registeredAt: new Date('2025-08-31T21:14:00'), nextNotify: '20分' },
+      { id: 2, word: 'ubiquitous', meaning: '至る所に存在する', registeredAt: new Date('2025-08-31T20:34:00'), nextNotify: '1時間' },
+      { id: 3, word: 'ephemeral', meaning: 'つかの間の、儚い', registeredAt: new Date('2025-08-31T12:34:00'), nextNotify: '9時間' },
+      { id: 4, word: 'resilience', meaning: '回復力、弾力性', registeredAt: new Date('2025-08-30T21:34:00'), nextNotify: '1日' },
+    ];
+
+    const Header = ({ onLogout, strengthenedMemoryCount }) => (
+      <header className="bg-white shadow-sm sticky top-0 z-10 h-[64px] flex items-center">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+                <Icon name="Book" className="text-blue-600 mr-2" />
+                エビングハウスくん
+              </h1>
+              <span className="text-sm font-semibold text-green-600 bg-green-100 px-3 py-1 rounded-full">
+                増えた記憶：{strengthenedMemoryCount}個
+              </span>
+            </div>
+            <button onClick={onLogout} className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+              <Icon name="LogOut" className="w-6 h-6 text-gray-500" />
+            </button>
+          </div>
+        </div>
+      </header>
+    );
+
+    const Dashboard = ({ words, onSave, onEdit, onStrengthenMemory }) => {
+      const [newWord, setNewWord] = useState('');
+      const [newMeaning, setNewMeaning] = useState('');
+
+      const handleAddNewWord = (e) => {
+        e.preventDefault();
+        if (newWord.trim() && newMeaning.trim()) {
+          onSave({ word: newWord, meaning: newMeaning });
+          setNewWord('');
+          setNewMeaning('');
+        }
+      };
+
+      return (
+        <div className="p-4 sm:p-6 lg:p-8">
+          <div className="sticky top-[64px] bg-white/95 backdrop-blur-sm rounded-xl shadow-md p-4 mb-8 z-5">
+            <form onSubmit={handleAddNewWord}>
+              <div className="mb-4">
+                <label htmlFor="new-word" className="block text-sm font-medium text-gray-700 mb-1">単語</label>
+                <input
+                  type="text"
+                  id="new-word"
+                  value={newWord}
+                  onChange={(e) => setNewWord(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                  placeholder="例: ubiquitous"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label htmlFor="new-meaning" className="block text-sm font-medium text-gray-700 mb-1">意味</label>
+                <textarea
+                  id="new-meaning"
+                  value={newMeaning}
+                  onChange={(e) => setNewMeaning(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                  placeholder="例: 至る所に存在する"
+                  rows="2"
+                  required
+                />
+              </div>
+              <div className="flex justify-center">
+                <button
+                  type="submit"
+                  className="w-full sm:w-auto px-6 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center justify-center"
+                >
+                  ✏️ 記憶する
+                </button>
+              </div>
+            </form>
+          </div>
+          
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">記憶達</h2>
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            <ul className="divide-y divide-gray-200">
+              {words.map((word) => (
+                <li key={word.id} className="p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between flex-wrap">
+                    <div className="flex-1 min-w-[200px] mb-2 sm:mb-0">
+                      <p className="text-lg font-semibold text-gray-900">{word.word}</p>
+                      <p className="text-md text-gray-600">{word.meaning}</p>
+                      <p className="text-xs text-gray-400 mt-1">この単語と初めて出会った日: {formatDate(word.registeredAt)}</p>
+                    </div>
+                    <div className="flex items-center space-x-2 sm:space-x-4">
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">また出会うまで</p>
+                        <p className="text-sm font-medium text-blue-600 flex items-center justify-end">
+                          <Icon name="Bell" className="w-4 h-4 mr-1" />
+                          {word.nextNotify}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{formatDate(calculateNotifyDate(word.registeredAt, word.nextNotify))}</p>
+                      </div>
+                      <div className="flex space-x-1">
+                        <button onClick={() => onEdit(word)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-full transition-colors">
+                          <Icon name="Edit" className="w-5 h-5" />
+                        </button>
+                        <button onClick={() => onStrengthenMemory(word.id)} className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-100 rounded-full transition-colors">
+                          <Icon name="Check" className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      );
+    };
+
+    const WordFormModal = ({ word, onSave, onCancel }) => {
+      const [currentWord, setCurrentWord] = useState(word ? word.word : '');
+      const [meaning, setMeaning] = useState(word ? word.meaning : '');
+      const [nextNotify, setNextNotify] = useState(word ? word.nextNotify : '20分');
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave({ ...word, word: currentWord, meaning, nextNotify });
+      };
+
+      const notifyOptions = ['20分', '1時間', '9時間', '1日', '1週間', '1ヶ月'];
+
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 sm:p-8">
+            <h3 className="text-2xl font-bold text-center mb-6">単語を編集</h3>
+            <form onSubmit={handleSubmit}>
+              <div className="mb-4">
+                <label htmlFor="word" className="block text-sm font-medium text-gray-700 mb-1">単語</label>
+                <input
+                  type="text"
+                  id="word"
+                  value={currentWord}
+                  onChange={(e) => setCurrentWord(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                  placeholder="例: Apple"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label htmlFor="meaning" className="block text-sm font-medium text-gray-700 mb-1">意味</label>
+                <textarea
+                  id="meaning"
+                  value={meaning}
+                  onChange={(e) => setMeaning(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                  placeholder="例: りんご"
+                  rows="3"
+                  required
+                />
+              </div>
+              <div className="mb-6">
+                <label htmlFor="nextNotify" className="block text-sm font-medium text-gray-700 mb-1">次の出会いのタイミング</label>
+                <select
+                  id="nextNotify"
+                  value={nextNotify}
+                  onChange={(e) => setNextNotify(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-white appearance-none"
+                >
+                  {notifyOptions.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end space-x-4">
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  更新する
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    };
+
+    const SettingsPage = () => {
+      const [notificationMethod, setNotificationMethod] = useState('email');
+      const [isLineLinked, setIsLineLinked] = useState(false);
+
+      return (
+        <div className="p-4 sm:p-6 lg:p-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">設定</h2>
+          <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center"><Icon name="Bell" className="w-5 h-5 mr-2 text-blue-600"/>通知設定</h3>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">復習の通知を受け取る方法を選択してください。</p>
+              <div className="flex space-x-4">
+                 <button onClick={() => setNotificationMethod('email')} className={`flex-1 p-4 rounded-lg border-2 text-center transition-all ${notificationMethod === 'email' ? 'border-blue-600 bg-blue-50' : 'border-gray-300 bg-white hover:border-blue-400'}`}>
+                    <div className="flex items-center justify-center text-lg font-semibold"><Icon name="Mail" className="w-6 h-6 mr-2"/> メール</div>
+                    <p className="text-xs text-gray-500 mt-1">登録メールアドレスに送信</p>
+                 </button>
+                 <button onClick={() => setNotificationMethod('line')} className={`flex-1 p-4 rounded-lg border-2 text-center transition-all ${notificationMethod === 'line' ? 'border-green-600 bg-green-50' : 'border-gray-300 bg-white hover:border-green-400'}`}>
+                    <div className="flex items-center justify-center text-lg font-semibold"><Icon name="MessageSquare" className="w-6 h-6 mr-2"/> LINE</div>
+                    <p className="text-xs text-gray-500 mt-1">LINE Notifyで通知</p>
+                 </button>
+              </div>
+
+              {notificationMethod === 'line' && (
+                 <div className="mt-4 text-center">
+                    {isLineLinked ? (
+                      <div className="flex flex-col items-center">
+                        <p className="text-green-700 mb-2">LINEと連携済みです。</p>
+                        <button onClick={() => setIsLineLinked(false)} className="text-sm text-red-600 hover:underline">連携を解除する</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setIsLineLinked(true)} className="bg-green-500 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-green-600 transition-colors flex items-center mx-auto">
+                        <Icon name="MessageSquare" className="w-5 h-5 mr-2"/> LINEと連携する
+                      </button>
+                    )}
+                 </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center"><Icon name="User" className="w-5 h-5 mr-2 text-blue-600"/>アカウント情報</h3>
+            <div className="space-y-3">
+              <a href="#" className="flex justify-between items-center p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-center">
+                  <Icon name="Mail" className="w-5 h-5 mr-3 text-gray-500"/>
+                  <span>メールアドレス変更</span>
+                </div>
+                <Icon name="ChevronRight" className="w-5 h-5 text-gray-400" />
+              </a>
+              <a href="#" className="flex justify-between items-center p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-center">
+                  <Icon name="Lock" className="w-5 h-5 mr-3 text-gray-500"/>
+                  <span>パスワード変更</span>
+                </div>
+                <Icon name="ChevronRight" className="w-5 h-5 text-gray-400" />
+              </a>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const LoginPage = ({ onLogin, onNavigateToSignUp }) => {
+      return (
+        <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center p-4">
+          <div className="w-full max-w-sm">
+            <div className="text-center mb-8">
+              <h1 className="text-4xl font-bold text-gray-800 flex items-center justify-center">
+                <Icon name="Book" className="text-blue-600 mr-2 w-10 h-10" />
+                エビングハウスくん
+              </h1>
+              <p className="text-gray-600 mt-2">科学で効率化する、新しい単語学習。</p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <form onSubmit={(e) => { e.preventDefault(); onLogin(); }}>
+                <div className="mb-4">
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
+                    メールアドレス
+                  </label>
+                  <input className="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" id="email" type="email" placeholder="email@example.com" defaultValue="user@example.com" />
+                </div>
+                <div className="mb-6">
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
+                    パスワード
+                  </label>
+                  <input className="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 mb-3 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" id="password" type="password" placeholder="******************" defaultValue="password" />
+                  <a className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800" href="#">
+                    パスワードを忘れましたか？
+                  </a>
+                </div>
+                <div className="flex items-center justify-between">
+                  <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:shadow-outline w-full transition-colors" type="submit">
+                    メールアドレスでログイン
+                  </button>
+                </div>
+              </form>
+              <div className="my-4 flex items-center before:flex-1 before:border-t before:border-gray-300 before:mt-0.5 after:flex-1 after:border-t after:border-gray-300 after:mt-0.5">
+                <p className="text-center text-sm text-gray-500 mx-4">または</p>
+              </div>
+              <button onClick={onLogin} className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-colors">
+                  <Icon name="MessageSquare" className="w-5 h-5 mr-2" />
+                  LINEでログイン
+              </button>
+               <p className="text-center text-sm text-gray-600 mt-6">
+                  アカウントをお持ちでないですか？{' '}
+                  <button onClick={onNavigateToSignUp} className="font-bold text-blue-500 hover:text-blue-800 underline">
+                    新規登録
+                  </button>
+                </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const SignUpPage = ({ onSignUp, onNavigateToLogin }) => {
+      return (
+        <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center p-4">
+          <div className="w-full max-w-sm">
+            <div className="text-center mb-8">
+               <h1 className="text-4xl font-bold text-gray-800 flex items-center justify-center">
+                <Icon name="Book" className="text-blue-600 mr-2 w-10 h-10" />
+                エビングハウスくん
+              </h1>
+              <p className="text-gray-600 mt-2">アカウントを登録</p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <form onSubmit={(e) => { e.preventDefault(); onSignUp(); }}>
+                <div className="mb-4">
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="signup-email">
+                    メールアドレス
+                  </label>
+                  <input className="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" id="signup-email" type="email" placeholder="email@example.com" />
+                </div>
+                <div className="mb-6">
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="signup-password">
+                    パスワード
+                  </label>
+                  <input className="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 mb-3 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" id="signup-password" type="password" placeholder="******************" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:shadow-outline w-full transition-colors" type="submit">
+                    メールアドレスで登録
+                  </button>
+                </div>
+              </form>
+              <div className="my-4 flex items-center before:flex-1 before:border-t before:border-gray-300 before:mt-0.5 after:flex-1 after:border-t after:border-gray-300 after:mt-0.5">
+                <p className="text-center text-sm text-gray-500 mx-4">または</p>
+              </div>
+              <button onClick={onSignUp} className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-colors">
+                  <Icon name="MessageSquare" className="w-5 h-5 mr-2" />
+                  LINEで新規登録
+              </button>
+               <p className="text-center text-sm text-gray-600 mt-6">
+                  アカウントをお持ちですか？{' '}
+                  <button onClick={onNavigateToLogin} className="font-bold text-blue-500 hover:text-blue-800 underline">
+                    ログイン
+                  </button>
+                </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    const StrengthenConfirmationModal = ({ onConfirm, onCancel }) => {
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 sm:p-8">
+            <div className="flex items-center mb-3">
+              <div className="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                <Icon name="Check" className="h-6 w-6 text-green-600" aria-hidden="true" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 ml-4">記憶できましたか？</h3>
+            </div>
+            <p className="text-center text-xs text-gray-500 mb-6">※はいを押すと通知が来なくなります</p>
+            <div className="flex justify-center space-x-4">
+              <button
+                onClick={onConfirm}
+                className="px-8 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                はい
+              </button>
+              <button
+                onClick={onCancel}
+                className="px-8 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                いいえ
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    function App() {
+      const [isLoggedIn, setIsLoggedIn] = useState(false);
+      const [authPage, setAuthPage] = useState('login'); // 'login' or 'signup'
+      const [words, setWords] = useState(initialWords);
+      const [currentPage, setCurrentPage] = useState('dashboard'); // 'dashboard', 'settings'
+      const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+      const [editingWord, setEditingWord] = useState(null);
+      const [strengthenedMemoryCount, setStrengthenedMemoryCount] = useState(0);
+      const [isStrengthenModalOpen, setIsStrengthenModalOpen] = useState(false);
+      const [wordToStrengthenId, setWordToStrengthenId] = useState(null);
+
+      const handleLogin = () => setIsLoggedIn(true);
+      const handleSignUp = () => setIsLoggedIn(true);
+      const handleLogout = () => {
+          setIsLoggedIn(false);
+          setAuthPage('login');
+      };
+
+      const handleEditWord = (word) => {
+        setEditingWord(word);
+        setIsEditModalOpen(true);
+      };
+      
+      const openStrengthenModal = (id) => {
+        setWordToStrengthenId(id);
+        setIsStrengthenModalOpen(true);
+      };
+
+      const confirmStrengthenMemory = () => {
+        if (wordToStrengthenId) {
+          setWords(words.filter(w => w.id !== wordToStrengthenId));
+          setStrengthenedMemoryCount(prevCount => prevCount + 1);
+        }
+        setIsStrengthenModalOpen(false);
+        setWordToStrengthenId(null);
+      };
+
+      const cancelStrengthenMemory = () => {
+        setIsStrengthenModalOpen(false);
+        setWordToStrengthenId(null);
+      };
+
+      const handleSaveWord = (wordToSave) => {
+        if (wordToSave.id) {
+          const originalWord = words.find(w => w.id === wordToSave.id);
+          setWords(words.map(w => w.id === wordToSave.id ? { ...wordToSave, registeredAt: originalWord.registeredAt } : w));
+        } else {
+          const newWord = { 
+            ...wordToSave,
+            id: Date.now(),
+            registeredAt: new Date(),
+            nextNotify: '20分'
+          };
+          setWords([newWord, ...words]);
+        }
+        setIsEditModalOpen(false);
+        setEditingWord(null);
+      };
+
+
+      if (!isLoggedIn) {
+          if(authPage === 'login') {
+            return <LoginPage onLogin={handleLogin} onNavigateToSignUp={() => setAuthPage('signup')} />;
+          } else {
+            return <SignUpPage onSignUp={handleSignUp} onNavigateToLogin={() => setAuthPage('login')} />;
+          }
+      }
+
+      return (
+        <div className="bg-gray-50 min-h-screen">
+          <Header onLogout={handleLogout} strengthenedMemoryCount={strengthenedMemoryCount}/>
+          <div className="flex max-w-4xl mx-auto">
+            {/* PC用サイドナビゲーション */}
+            <aside className="hidden lg:block w-48 pt-10 flex-shrink-0">
+                 <nav className="flex flex-col space-y-2 sticky top-[80px]">
+                     <button onClick={() => setCurrentPage('dashboard')} className={`flex items-center p-3 rounded-lg transition-colors ${currentPage === 'dashboard' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}>
+                         <Icon name="Book" className="w-5 h-5 mr-3" />
+                         <span>単語一覧</span>
+                     </button>
+                     <button onClick={() => setCurrentPage('settings')} className={`flex items-center p-3 rounded-lg transition-colors ${currentPage === 'settings' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-100'}`}>
+                         <Icon name="Settings" className="w-5 h-5 mr-3" />
+                         <span>設定</span>
+                     </button>
+                 </nav>
+            </aside>
+            <main className="flex-grow">
+              {currentPage === 'dashboard' && (
+                <Dashboard
+                  words={words}
+                  onSave={handleSaveWord}
+                  onEdit={handleEditWord}
+                  onStrengthenMemory={openStrengthenModal}
+                />
+              )}
+              {currentPage === 'settings' && <SettingsPage />}
+            </main>
+          </div>
+
+          {/* フッターナビゲーション */}
+          <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 lg:hidden">
+            <nav className="flex justify-around max-w-4xl mx-auto">
+                <button onClick={() => setCurrentPage('dashboard')} className={`flex-1 text-center py-3 ${currentPage === 'dashboard' ? 'text-blue-600 border-t-2 border-blue-600' : 'text-gray-500'}`}>
+                    <Icon name="Book" className="mx-auto mb-1" />
+                    <span className="text-xs">単語一覧</span>
+                </button>
+                <button onClick={() => setCurrentPage('settings')} className={`flex-1 text-center py-3 ${currentPage === 'settings' ? 'text-blue-600 border-t-2 border-blue-600' : 'text-gray-500'}`}>
+                    <Icon name="Settings" className="mx-auto mb-1" />
+                    <span className="text-xs">設定</span>
+                </button>
+            </nav>
+          </footer>
+          
+          {isEditModalOpen && <WordFormModal word={editingWord} onSave={handleSaveWord} onCancel={() => setIsEditModalOpen(false)} />}
+          {isStrengthenModalOpen && <StrengthenConfirmationModal onConfirm={confirmStrengthenMemory} onCancel={cancelStrengthenMemory} />}
+        </div>
+      );
+    }
+
+    // --- Reactアプリを描画 ---
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(<App />);
+
+  </script>
+</body>
+</html>
+
